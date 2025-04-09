@@ -17,6 +17,7 @@ void initDisplay(bool SD_enable){
     digitalWrite(15, HIGH); // TFT screen chip select
     digitalWrite( 5, HIGH); // SD card chips select, must use GPIO 5 (ESP32 SS)
 
+    tft.fillScreen(TFT_BLACK);
 
     tft.begin();
     if (!SD.begin(5, tft.getSPIinstance()) && SD_enable) {
@@ -48,11 +49,9 @@ void initDisplay(bool SD_enable){
         Serial.println("initialisation done.");
     }
 
-    tft.fillScreen(TFT_BLACK);
 }
 
-void drawSdJpeg(const char *filename, int xpos, int ypos) {
-
+void drawSdJpeg(const char *filename, int xpos, int ypos, bool centered = false) {
   File jpegFile = SD.open(filename);
   if (!jpegFile) {
     Serial.println("Failed to open file for reading");
@@ -63,9 +62,30 @@ void drawSdJpeg(const char *filename, int xpos, int ypos) {
   Serial.print("Drawing file: "); Serial.println(filename);
   Serial.println("===========================");
 
+  // If centered, we need to get dimensions first
+  if (centered) {
+    bool pre_decoded = JpegDec.decodeSdFile(jpegFile);
+    if (pre_decoded) {
+      // Get image dimensions
+      uint32_t image_width = JpegDec.width;
+      uint32_t image_height = JpegDec.height;
+      
+      // Calculate centered position
+      xpos = (TFT_WIDTH - image_width) / 2;
+      ypos = (TFT_HEIGHT - image_height) / 2;
+      
+      // Ensure position isn't negative
+      xpos = max(0, xpos);
+      ypos = max(0, ypos);
+      
+      // Close and reopen for actual rendering
+      jpegFile.close();
+      jpegFile = SD.open(filename);
+    }
+  }
+
   // Use one of the following methods to initialise the decoder:
-  bool decoded = JpegDec.decodeSdFile(jpegFile);  // Pass the SD file handle to the decoder,
-  //bool decoded = JpegDec.decodeSdFile(filename);  // or pass the filename (String or character array)
+  bool decoded = JpegDec.decodeSdFile(jpegFile);
 
   if (decoded) {
     // render the image onto the screen at given coordinates
@@ -75,7 +95,6 @@ void drawSdJpeg(const char *filename, int xpos, int ypos) {
     Serial.println("Jpeg file format not supported!");
   }
 }
-
 
 void jpegRender(int xpos, int ypos) {
 

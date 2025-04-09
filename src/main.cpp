@@ -3,7 +3,7 @@
 
 void setup() {
   Serial.begin(115200);
-  initDisplay(true);
+  initDisplay(false);
 
   // drawSdJpeg("/bsr/Jonathan.jpeg", 0, 0);
 }
