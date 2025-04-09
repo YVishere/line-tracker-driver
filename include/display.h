@@ -3,7 +3,7 @@
 
 
 void initDisplay(bool SD_enable = true);
-void drawSdJpeg(const char *filename, int xpos, int ypos);
+void drawSdJpeg(const char *filename, int xpos, int ypos, bool centered = false);
 void jpegRender(int xpos, int ypos);
 void rotateColors();
 

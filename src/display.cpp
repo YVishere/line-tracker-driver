@@ -1,4 +1,5 @@
 #include "display.h"
+#include <Arduino.h>
 
 #include <SPI.h>
 
@@ -30,6 +31,9 @@ void initDisplay(bool SD_enable){
     tft.fillScreen(TFT_BLACK);
 
     tft.begin();
+    tft.setRotation(1);  // Somehow important to have an odd rotation number
+                          //Display does not work properly if you do not set this and initialise the SD card
+    tft.fillScreen(TFT_BLACK);
     
     if (!SD.begin(5, tft.getSPIinstance())) {
       Serial.println("Card Mount Failed");
@@ -59,7 +63,7 @@ void initDisplay(bool SD_enable){
     Serial.println("initialisation done.");
 }
 
-void drawSdJpeg(const char *filename, int xpos, int ypos, bool centered = false) {
+void drawSdJpeg(const char *filename, int xpos, int ypos, bool centered) {
   File jpegFile = SD.open(filename);
   if (!jpegFile) {
     Serial.println("Failed to open file for reading");
