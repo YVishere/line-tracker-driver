@@ -1,5 +1,16 @@
 #include "display.h"
 
+TFT_eSPI tft = TFT_eSPI();
+
+//Array of random colors to cycle through
+uint16_t colors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_CYAN, TFT_MAGENTA};
+
+void rotateColors() {
+  static uint8_t colorIndex = 0;
+  tft.fillScreen(colors[colorIndex]);
+  colorIndex = (colorIndex + 1) % (sizeof(colors) / sizeof(colors[0]));
+}
+
 void initDisplay(bool SD_enable){
     // Set all chip selects high to avoid bus contention during initialisation of each peripheral
     digitalWrite(22, HIGH); // Touch controller chip select (if used)
@@ -36,6 +47,8 @@ void initDisplay(bool SD_enable){
 
         Serial.println("initialisation done.");
     }
+
+    tft.fillScreen(TFT_BLACK);
 }
 
 void drawSdJpeg(const char *filename, int xpos, int ypos) {
