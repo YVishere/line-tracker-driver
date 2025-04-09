@@ -14,7 +14,7 @@
 TFT_eSPI tft = TFT_eSPI();
 
 //Array of random colors to cycle through
-int colors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_CYAN, TFT_MAGENTA};
+uint32_t colors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_CYAN, TFT_MAGENTA};
 
 void rotateColors() {
   static uint8_t colorIndex = 0;
