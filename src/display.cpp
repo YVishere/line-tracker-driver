@@ -1,5 +1,7 @@
 #include "display.h"
 
+TFT_eSPI tft = TFT_eSPI();
+
 void initDisplay(bool SD_enable){
     // Set all chip selects high to avoid bus contention during initialisation of each peripheral
     digitalWrite(22, HIGH); // Touch controller chip select (if used)
