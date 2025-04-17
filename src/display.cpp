@@ -11,10 +11,24 @@
 // JPEG decoder library
 #include <JPEGDecoder.h>
 
+const char* ANIM_FILEPATH = "/bsr/som.bin";
+
+volatile int old_start_x = 0;
+volatile int old_start_y = 0;
+volatile int old_width = 0;
+volatile int old_height = 0;
+
 TFT_eSPI tft = TFT_eSPI();
 
+//Heap pointer for animation frames
+uint8_t *frameHeap = NULL;
+
 //Array of random colors to cycle through
-uint32_t colors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_CYAN, TFT_MAGENTA};
+uint16_t colors[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_CYAN, TFT_MAGENTA};
+
+// Global file handle
+File animFile;
+bool animFileOpen = false;
 
 void rotateColors() {
   static uint8_t colorIndex = 0;
@@ -55,6 +69,12 @@ void initDisplay(bool SD_enable){
       Serial.println("SDHC");
     } else {
       Serial.println("UNKNOWN");
+    }
+
+    // Convert the text animation to binary format (only needed once)
+    if (!SD.exists("/bsr/som.bin")) {
+      Serial.println("Creating binary animation file...");
+      convertTextToBinary("/bsr/som.txt", "/bsr/som.bin");
     }
   
     uint64_t cardSize = SD.cardSize() / (1024 * 1024);
@@ -185,3 +205,171 @@ void jpegRender(int xpos, int ypos) {
     tft.setSwapBytes(swapBytes);
   }
 
+
+uint8_t *initFrameHeap(int frameSize) {
+    // Allocate memory for the frame heap
+    uint8_t *frameHeap = (uint8_t *)malloc(frameSize * sizeof(uint8_t));
+    if (frameHeap == NULL) {
+        Serial.println("Failed to allocate memory for frame heap");
+        return NULL;
+    }
+    return frameHeap;
+}  
+
+void freeFrameHeap(uint8_t *frameHeap) {
+    // Free the allocated memory for the frame heap
+    if (frameHeap != NULL) {
+        free(frameHeap);
+        Serial.println("Frame heap memory freed successfully");
+    } else {
+        Serial.println("Frame heap is already NULL, no need to free memory");
+    }
+}
+
+// Improved animation loading with block reading for RGB332 format
+void HeapAnim(bool clear_old) {
+  if (clear_old) {
+    tft.fillRect(old_start_x, old_start_y, old_width, old_height, TFT_BLACK);
+  }
+
+  // Initialize heap only once - Use 1 byte per pixel for RGB332 format
+  if (frameHeap == NULL) {
+    frameHeap = initFrameHeap(ANIMATION_WIDTH * ANIMATION_HEIGHT); // RGB332 is 1 byte per pixel
+    if (frameHeap == NULL) {
+      Serial.println("Failed to allocate memory for frame heap");
+      return;
+    }
+  }
+
+  // Open file once for the entire animation
+  if (!animFileOpen) {
+    animFile = SD.open(ANIM_FILEPATH, FILE_READ);
+    if (!animFile) {
+      Serial.println("Animation file does not exist!");
+      // Try to convert if binary doesn't exist
+      if (SD.exists("/bsr/som.txt") && !SD.exists("/bsr/som.bin")) {
+        Serial.println("Trying to convert text file to binary...");
+        convertTextToBinary("/bsr/som.txt", "/bsr/som.bin");
+        animFile = SD.open(ANIM_FILEPATH, FILE_READ);
+        if (!animFile) {
+          Serial.println("Still couldn't open animation file after conversion");
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+    animFileOpen = true;
+    Serial.println("Animation file opened successfully");
+    Serial.printf("Animation file size: %d bytes\n", animFile.size());
+  }
+
+  uint32_t startTime = millis();
+  
+  for (int i = 0; i < 14; i++) {
+    uint32_t frameStart = millis();
+    HeapDispFrame(i);
+    Serial.printf("Frame %d timing: %d ms\n", i, millis() - frameStart);
+    delay(42);  // Target ~24fps
+  }
+  
+  Serial.printf("Total animation time: %d ms\n", millis() - startTime);
+  
+  // Close file when animation completes
+  animFile.close();
+  animFileOpen = false;
+  Serial.println("Animation file closed");
+}
+
+void HeapDispFrame(int frameIndex) {
+  // Seek to the correct position instead of re-opening
+  // For RGB332 format (1 byte per pixel)
+  uint32_t frameOffset = frameIndex * ANIMATION_WIDTH * ANIMATION_HEIGHT;
+  
+  if (animFileOpen) {
+    animFile.seek(frameOffset);
+    
+    // Block reading - now for RGB332 (1 byte per pixel)
+    uint32_t bytesRead = animFile.read(frameHeap, ANIMATION_WIDTH * ANIMATION_HEIGHT);
+    
+    if (bytesRead != ANIMATION_WIDTH * ANIMATION_HEIGHT) {
+      Serial.printf("Error reading frame: read %d bytes\n", bytesRead);
+    }
+    
+    // Calculate position to center
+    int start_x = (WIDTH - ANIMATION_WIDTH) / 2;
+    int start_y = (HEIGHT - ANIMATION_HEIGHT) / 2;
+    
+    // Display the frame - RGB332 format
+    tft.pushImage(start_x, start_y, ANIMATION_WIDTH, ANIMATION_HEIGHT, frameHeap, true); 
+    // The last parameter 'true' tells the library this is RGB332 format
+    
+    // Store coordinates for clearing in next frame
+    old_start_x = start_x;
+    old_start_y = start_y;
+    old_width = ANIMATION_WIDTH;
+    old_height = ANIMATION_HEIGHT;
+  }
+}
+
+// You can keep your loadFrameIntoHeap function as a backward compatibility option
+// if you still need to support text files, but it will be much slower
+void loadFrameIntoHeap(int startIndex, int heapSize, uint8_t *frameHeap) {
+    // Open the SD card file for reading
+    File file = SD.open("/bsr/som.txt", FILE_READ);
+    if (SD.exists(ANIM_FILEPATH) == false) {
+        Serial.println("Animation file does not exist!");
+        return;
+    }
+    if (!file) {
+        Serial.println("Failed to open animation file");
+        return;
+    }
+
+    // Read the file line by line and store the values in the frame heap
+    int index = 0;
+    while (file.available()) {
+        String line = file.readStringUntil('\n');
+        if (index >= startIndex && index < startIndex + heapSize) {
+            frameHeap[index - startIndex] = (uint8_t)line.toInt();
+        }
+        if (index >= startIndex + heapSize) {
+            break; // Stop reading if we have filled the heap
+        }
+        index++;
+    }
+
+    // Close the file
+    file.close();
+}
+
+// Updated converter for RGB332 format (1 byte per pixel)
+void convertTextToBinary(const char* textFilePath, const char* binaryFilePath) {
+  File textFile = SD.open(textFilePath, FILE_READ);
+  if (!textFile) {
+    Serial.println("Failed to open text file");
+    return;
+  }
+  
+  File binaryFile = SD.open(binaryFilePath, FILE_WRITE);
+  if (!binaryFile) {
+    Serial.println("Failed to create binary file");
+    textFile.close();
+    return;
+  }
+  
+  uint8_t pixel; // Use 8-bit value for RGB332
+  int count = 0;
+  
+  while (textFile.available()) {
+    String line = textFile.readStringUntil('\n');
+    pixel = (uint8_t)line.toInt(); // Only need a single byte
+    binaryFile.write(pixel);
+    count++;
+  }
+  
+  textFile.close();
+  binaryFile.close();
+  
+  Serial.printf("Converted %d pixels to RGB332 binary format\n", count);
+}
