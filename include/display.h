@@ -36,6 +36,7 @@ void loadFrameIntoHeap(int startIndex, int heapSize, uint8_t *frameHeap);
 void HeapAnim(bool clear_old = true);
 void HeapDispFrame(int frameIndex);
 
-void convertTextToBinary(const char* textFilePath, const char* binaryFilePath);
+void convertTextToBinaryFrames(const char* textFilePath);
+
 
 #endif

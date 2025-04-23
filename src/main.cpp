@@ -3,10 +3,12 @@
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("Starting...");
   initDisplay(false);
   
-  drawSdJpeg("/bsr/Jonathan.jpeg", 130, 0);
-  delay(5000);
+  // drawSdJpeg("/bsr/Jonathan.jpeg", 130, 0);
+  HeapAnim();
+  Serial.println("Setup done.");
 }
 
 void loop() {
@@ -14,5 +16,5 @@ void loop() {
   // delay(42);
   // drawSdJpeg("/test.jpg", 0, 0);
 
-  HeapAnim();
+  // HeapAnim();
 }

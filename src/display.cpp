@@ -12,13 +12,15 @@
 #include <JPEGDecoder.h>
 
 // Frame file pattern - will use: /bsr/frame0.bin, /bsr/frame1.bin, etc.
-const char* FRAME_FILE_PATTERN = "/bsr/frame%d.bin";
+const char* FRAME_FILE_PATTERN = "/output_frames/frame%d.bin";
 char currentFramePath[32]; // Buffer to store the current frame path
 
 volatile int old_start_x = 0;
 volatile int old_start_y = 0;
 volatile int old_width = 0;
 volatile int old_height = 0;
+
+int totalFrames = 0;
 
 TFT_eSPI tft = TFT_eSPI();
 
@@ -32,6 +34,18 @@ void rotateColors() {
   static uint8_t colorIndex = 0;
   tft.fillScreen(colors[colorIndex]);
   colorIndex = (colorIndex + 1) % (sizeof(colors) / sizeof(colors[0]));
+}
+
+void countAvailableFrames() {
+  totalFrames = 0;
+  while(true) {
+    sprintf(currentFramePath, FRAME_FILE_PATTERN, totalFrames);
+    if(!SD.exists(currentFramePath)) {
+      break;
+    }
+    totalFrames++;
+  }
+  Serial.printf("Found %d animation frames\n", totalFrames);
 }
 
 void initDisplay(bool SD_enable){
@@ -69,25 +83,28 @@ void initDisplay(bool SD_enable){
       Serial.println("UNKNOWN");
     }
 
-    // Check if frame files need to be created from text
-    bool needsConversion = false;
-    for (int i = 0; i < 14; i++) {
-      sprintf(currentFramePath, FRAME_FILE_PATTERN, i);
-      if (!SD.exists(currentFramePath)) {
-        needsConversion = true;
-        break;
-      }
-    }
+    // // Check if frame files need to be created from text
+    // bool needsConversion = false;
+    // for (int i = 0; i < 14; i++) {
+    //   sprintf(currentFramePath, FRAME_FILE_PATTERN, i);
+    //   if (!SD.exists(currentFramePath)) {
+    //     needsConversion = true;
+    //     break;
+    //   }
+    // }
 
-    // Convert the text animation to individual binary frame files if needed
-    if (needsConversion && SD.exists("/bsr/som.txt")) {
-      Serial.println("Creating individual binary frame files...");
-      convertTextToBinaryFrames("/bsr/som.txt");
-    }
+    // // Convert the text animation to individual binary frame files if needed
+    // if (needsConversion && SD.exists("/bsr/som.txt")) {
+    //   Serial.println("Creating individual binary frame files...");
+    //   convertTextToBinaryFrames("/bsr/som.txt");
+    // }
   
     uint64_t cardSize = SD.cardSize() / (1024 * 1024);
     Serial.printf("SD Card Size: %lluMB\n", cardSize);
   
+    // countAvailableFrames();
+    // Serial.printf("Total frames available: %d\n", totalFrames);
+
     Serial.println("Initialization done.");
 }
 
@@ -233,13 +250,8 @@ void freeFrameHeap(uint8_t *frameHeap) {
     }
 }
 
-// Modified animation with individual frame files
-void HeapAnim(bool clear_old = false) {
-  // Clear previous frame if requested
-  if (clear_old) {
-    tft.fillRect(old_start_x, old_start_y, old_width, old_height, TFT_BLACK);
-  }
-
+// Modified animation with individual frame files - no clearing between frames
+void HeapAnim(bool clear_old) {
   // Initialize heap only once - Use 1 byte per pixel for RGB332 format
   if (frameHeap == NULL) {
     frameHeap = initFrameHeap(ANIMATION_WIDTH * ANIMATION_HEIGHT); // RGB332 is 1 byte per pixel
@@ -251,18 +263,17 @@ void HeapAnim(bool clear_old = false) {
 
   uint32_t startTime = millis();
   
-  // Display each frame in sequence
-  for (int i = 0; i < 14; i++) {
+  // Display each frame in sequence - no clearing between frames
+  for (int i = 0; i < 11; i++) {
     uint32_t frameStart = millis();
     HeapDispFrame(i);
     Serial.printf("Frame %d timing: %d ms\n", i, millis() - frameStart);
-    delay(42);  // Target ~24fps
   }
   
   Serial.printf("Total animation time: %d ms\n", millis() - startTime);
 }
 
-// Modified to load a specific frame file
+// Modified to load a specific frame file - no frame clearing
 void HeapDispFrame(int frameIndex) {
   // Generate the frame file path
   sprintf(currentFramePath, FRAME_FILE_PATTERN, frameIndex);
@@ -288,10 +299,10 @@ void HeapDispFrame(int frameIndex) {
   int start_x = (WIDTH - ANIMATION_WIDTH) / 2;
   int start_y = (HEIGHT - ANIMATION_HEIGHT) / 2;
   
-  // Push the frame directly to the display
+  // Push the frame directly to the display - will overwrite previous frame
   tft.pushImage(start_x, start_y, ANIMATION_WIDTH, ANIMATION_HEIGHT, frameHeap, true); 
   
-  // Store coordinates for clearing in next frame
+  // Still store coordinates for potential future use
   old_start_x = start_x;
   old_start_y = start_y;
   old_width = ANIMATION_WIDTH;
